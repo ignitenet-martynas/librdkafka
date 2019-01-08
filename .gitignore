@@ -26,3 +26,5 @@ staging-docs
 tmp
 stats*.json
 test_report*.json
+.clang-format
+.vscode/
