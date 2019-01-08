@@ -156,4 +156,18 @@ rd_kafka_roundrobin_assignor_assign_cb (rd_kafka_t *rk,
 					char *errstr, size_t errstr_size,
 					void *opaque);
 
+/**
+ * rd_kafka_sticky_assignor.c
+ */
+rd_kafka_resp_err_t
+rd_kafka_sticky_assignor_assign_cb (rd_kafka_t *rk,
+                                    const char *member_id,
+                                    const char *protocol_name,
+                                    const rd_kafka_metadata_t *metadata,
+                                    rd_kafka_group_member_t *members,
+                                    size_t member_cnt,
+                                    rd_kafka_assignor_topic_t **eligible_topics,
+                                    size_t eligible_topic_cnt,
+                                    char *errstr, size_t errstr_size,
+                                    void *opaque);
 #endif /* _RDKAFKA_ASSIGNOR_H_ */

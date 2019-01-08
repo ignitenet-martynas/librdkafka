@@ -31,6 +31,7 @@ set(
     rdkafka_roundrobin_assignor.c
     rdkafka_sasl.c
     rdkafka_sasl_plain.c
+    rdkafka_sticky_assignor.c
     rdkafka_subscription.c
     rdkafka_timer.c
     rdkafka_topic.c
@@ -134,7 +135,7 @@ if(RDKAFKA_BUILD_STATIC)
   target_compile_definitions(rdkafka PUBLIC LIBRDKAFKA_STATICLIB)
 endif()
 
-if(WIN32)  
+if(WIN32)
   if(RDKAFKA_BUILD_STATIC)
     target_link_libraries(rdkafka PUBLIC crypt32)
   else()
