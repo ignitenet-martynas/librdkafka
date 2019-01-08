@@ -3,24 +3,24 @@
  *
  * Copyright (c) 2012-2013, Magnus Edenhill
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met: 
- * 
+ * modification, are permitted provided that the following conditions are met:
+ *
  * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer. 
+ *    this list of conditions and the following disclaimer.
  * 2. Redistributions in binary form must reproduce the above copyright notice,
  *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution. 
- * 
+ *    and/or other materials provided with the distribution.
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE 
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE 
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE 
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR 
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF 
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS 
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN 
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
  * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
@@ -186,6 +186,7 @@ _TEST_DECL(0090_idempotence);
 _TEST_DECL(0091_max_poll_interval_timeout);
 _TEST_DECL(0092_mixed_msgver);
 _TEST_DECL(0093_holb_consumer);
+_TEST_DECL(0094_sticky_assignor);
 
 /* Manual tests */
 _TEST_DECL(8000_idle);
@@ -305,6 +306,7 @@ struct test tests[] = {
         _TEST(0091_max_poll_interval_timeout, 0, TEST_BRKVER(0,10,1,0)),
         _TEST(0092_mixed_msgver, 0, TEST_BRKVER(0,11,0,0)),
         _TEST(0093_holb_consumer, 0, TEST_BRKVER(0,10,1,0)),
+        _TEST(0094_sticky_assignor, 0),
 
         /* Manual tests */
         _TEST(8000_idle, TEST_F_MANUAL),
@@ -321,7 +323,7 @@ RD_TLS struct test *test_curr = &tests[0];
 /**
  * Socket network emulation with sockem
  */
- 
+
 static void test_socket_add (struct test *test, sockem_t *skm) {
         TEST_LOCK();
         rd_list_add(&test->sockets, skm);
@@ -1907,10 +1909,10 @@ rd_kafka_t *test_create_consumer (const char *group_id,
         if (default_topic_conf)
                 rd_kafka_conf_set_default_topic_conf(conf, default_topic_conf);
 
-	/* Create kafka instance */
-	rk = test_create_handle(RD_KAFKA_CONSUMER, conf);
+        /* Create kafka instance */
+        rk = test_create_handle(RD_KAFKA_CONSUMER, conf);
 
-	if (group_id)
+        if (group_id)
 		rd_kafka_poll_set_consumer(rk);
 
 	return rk;
@@ -2231,7 +2233,7 @@ void test_msgver_init (test_msgver_t *mv, uint64_t testid) {
 		else					\
 			TEST_WARN(__VA_ARGS__);		\
 	} while (0)
-			
+
 
 
 static void test_mv_mvec_grow (struct test_mv_mvec *mvec, int tot_size) {
@@ -2844,7 +2846,7 @@ static int test_msgver_verify_range (test_msgver_t *mv, int flags,
 
 	/* Collect all msgs into vs mvec */
 	test_mv_collect_all_msgs(mv, vs);
-	
+
 	fails += test_mv_mvec_verify_range(mv, TEST_MSGVER_BY_MSGID|flags,
 					   NULL, &vs->mvec, vs);
 	fails += test_mv_mvec_verify_dup(mv, TEST_MSGVER_BY_MSGID|flags,
@@ -4209,7 +4211,7 @@ test_wait_topic_admin_result (rd_kafka_queue_t *q,
  * @param useq Makes the call async and posts the response in this queue.
  *             If NULL this call will be synchronous and return the error
  *             result.
- *             
+ *
  * @remark Fails the current test on failure.
  */
 
