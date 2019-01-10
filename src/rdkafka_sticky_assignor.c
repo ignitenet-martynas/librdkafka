@@ -166,8 +166,8 @@ rd_kafka_sticky_assignor_get_metadata_cb (rd_kafka_assignor_t *rkas,
                                           const rd_list_t *topics) {
 
         // Free previous userData if any
-        if (rkas->rkas_userdata !== NULL) {
-                free(rkas->rkas_userdata);
+        if (rkas->rkas_userdata != NULL) {
+                free((void *)rkas->rkas_userdata);
         }
 
         if (member_assignment == NULL) {
