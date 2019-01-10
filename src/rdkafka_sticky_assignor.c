@@ -29,7 +29,8 @@
 #include "rdkafka_assignor.h"
 
 /**
- * Source: https://github.com/apache/kafka/blob/trunk/clients/src/main/java/org/apache/kafka/clients/consumer/StickyAssignor.java
+ * Source:
+ https://github.com/apache/kafka/blob/trunk/clients/src/main/java/org/apache/kafka/clients/consumer/StickyAssignor.java
  *
  * The sticky assignor serves two purposes. First, it guarantees an assignment
  * that is as balanced as possible, meaning either:
@@ -93,67 +94,117 @@
  * C2 [t2p0, t2p1, t2p2]
  */
 
-rd_kafka_resp_err_t
-rd_kafka_sticky_assignor_assign_cb (rd_kafka_t *rk,
-					const char *member_id,
-					const char *protocol_name,
-					const rd_kafka_metadata_t *metadata,
-					rd_kafka_group_member_t *members,
-					size_t member_cnt,
-					rd_kafka_assignor_topic_t
-					**eligible_topics,
-					size_t eligible_topic_cnt,
-					char *errstr, size_t errstr_size,
-					void *opaque) {
-        unsigned int ti;
-	int next = 0; /* Next member id */
+static void
+serialize_topic_partition_list (const rd_kafka_topic_partition_list_t *tplist,
+                                const void **pdata,
+                                size_t *psize) {
+        size_t size = 0;
+        char *data, *p;
+        int i, partition;
 
-	/* Sort topics by name */
-	qsort(eligible_topics, eligible_topic_cnt, sizeof(*eligible_topics),
-	      rd_kafka_assignor_topic_cmp);
+        for (i = 0; i < tplist->cnt; i++)
+                size += 2 + strlen(tplist->elems[i].topic) + 1;
 
-	/* Sort members by member id */
-	qsort(members, member_cnt, sizeof(*members),
-	      rd_kafka_group_member_cmp);
+        data = malloc (size);
 
-        for (ti = 0 ; ti < eligible_topic_cnt ; ti++) {
-                rd_kafka_assignor_topic_t *eligible_topic = eligible_topics[ti];
-		int partition;
+        p = data;
 
-		/* For each topic+partition, assign one member (in a cyclic
-		 * iteration) per partition until the partitions are exhausted*/
-		for (partition = 0 ;
-		     partition < eligible_topic->metadata->partition_cnt ;
-		     partition++) {
-			rd_kafka_group_member_t *rkgm;
+        for (i = 0; i < tplist->cnt; i++) {
+                partition = tplist->elems[i].partition;
+                p[0] = (partition & 0xff00) >> 8;
+                p[1] = partition & 0xff;
+                strcpy(p + 2, tplist->elems[i].topic);
+                p += 2 + strlen(tplist->elems[i].topic) + 1;
+        }
 
-			/* Scan through members until we find one with a
-			 * subscription to this topic. */
-			while (!rd_kafka_group_member_find_subscription(
-				       rk, &members[next],
-				       eligible_topic->metadata->topic))
-				next++;
+        *pdata = data;
+        *psize = size;
+}
 
-			rkgm = &members[next];
+static void
+deserialize_topic_partition_list (const void *data,
+                                  size_t size,
+                                  rd_kafka_topic_partition_list_t *tplist) {
+        const char *p, *end;
 
-			rd_kafka_dbg(rk, CGRP, "ASSIGN",
-				     "roundrobin: Member \"%s\": "
-				     "assigned topic %s partition %d",
-				     rkgm->rkgm_member_id->str,
-				     eligible_topic->metadata->topic,
-				     partition);
+        if (tplist->cnt != 0) {
+                /* Say what? */
+        }
 
-			rd_kafka_topic_partition_list_add(
-				rkgm->rkgm_assignment,
-				eligible_topic->metadata->topic, partition);
+        p = data;
+        end = p + size;
 
-			next = (next+1) % rd_list_cnt(&eligible_topic->members);
-		}
-	}
+        while (p < end) {
+                int partition = (unsigned int)p[0] << 8 | (unsigned int)p[1];
+                p += 2;
+                rd_kafka_topic_partition_list_add(tplist, p, partition);
+                p += strlen (p) + 1;
+        }
+}
 
+static rd_kafka_topic_partition_list_t *member_assignment;
+
+
+void rd_kafka_sticky_assignor_on_assignment_cb (
+        const char *member_id,
+        rd_kafka_group_member_t *assignment,
+        void *opaque) {
+
+        if (member_assignment != NULL) {
+                rd_kafka_topic_partition_list_destroy(
+                        member_assignment);
+        }
+
+        member_assignment = rd_kafka_topic_partition_list_copy(
+                assignment->rkgm_assignment);
+}
+
+rd_kafkap_bytes_t *
+rd_kafka_sticky_assignor_get_metadata_cb (rd_kafka_assignor_t *rkas,
+                                          const rd_list_t *topics) {
+        if (member_assignment == NULL) {
+                rkas->rkas_userdata = NULL;
+                rkas->rkas_userdata_size = 0;
+        } else {
+                // Serialize the assignments
+                serialize_topic_partition_list(member_assignment,
+                                               &rkas->rkas_userdata,
+                                               &rkas->rkas_userdata_size);
+        }
+
+        return rd_kafka_assignor_get_metadata(rkas, topics);
+}
+
+rd_kafka_resp_err_t rd_kafka_sticky_assignor_assign_cb (
+        rd_kafka_t *rk,
+        const char *member_id,
+        const char *protocol_name,
+        const rd_kafka_metadata_t *metadata,
+        rd_kafka_group_member_t *members,
+        size_t member_cnt,
+        rd_kafka_assignor_topic_t **eligible_topics,
+        size_t eligible_topic_cnt,
+        char *errstr,
+        size_t errstr_size,
+        void *opaque) {
+
+        unsigned int i;
+
+        for (i = 0; i < member_cnt; i++) {
+                rd_kafka_group_member_t *rkgm = &members[i];
+
+                rd_kafka_dbg (rk, CGRP, "ASSIGN",
+                              "sticky: Member \"%s\": "
+                              "found %d bytes of userData",
+                              rkgm->rkgm_member_id->str,
+                              rkgm->rkgm_userdata->len);
+
+                if (rkgm->rkgm_userdata->len > 0)
+                        deserialize_topic_partition_list (
+                                rkgm->rkgm_userdata->data,
+                                rkgm->rkgm_userdata->len,
+                                rkgm->rkgm_assignment);
+        }
 
         return 0;
 }
-
-
-
