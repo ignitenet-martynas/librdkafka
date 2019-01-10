@@ -2405,7 +2405,7 @@ static void
 rd_kafka_cgrp_handle_assignment (rd_kafka_cgrp_t *rkcg,
 				 rd_kafka_topic_partition_list_t *assignment) {
 
-	rd_kafka_rebalance_op(rkcg, RD_KAFKA_RESP_ERR__ASSIGN_PARTITIONS,
+        rd_kafka_rebalance_op(rkcg, RD_KAFKA_RESP_ERR__ASSIGN_PARTITIONS,
 			      assignment, "new assignment");
 }
 
@@ -3297,6 +3297,31 @@ void rd_kafka_cgrp_metadata_update_check (rd_kafka_cgrp_t *rkcg, int do_join) {
         }
 }
 
+static void rd_kafka_cgrp_assignor_invoke_on_assignment_cb (
+        rd_kafka_cgrp_t *rkcg,
+        rd_kafka_topic_partition_list_t *assignment) {
+        rd_kafka_group_member_t member;
+        rd_kafka_assignor_t *rkas;
+        rd_kafka_t *rk;
+        int i;
+
+        /* This is purely artifical: the dummy 'member' structure is partially
+         * initialized only in order to be compatible with the
+         * rkas_on_assignment_cb() signature */
+        memset(&member, 0, sizeof (member));
+        member.rkgm_member_id = rkcg->rkcg_member_id;
+        member.rkgm_assignment = assignment;
+
+        rk = rkcg->rkcg_rk;
+
+        RD_LIST_FOREACH(rkas, &rk->rk_conf.partition_assignors, i) {
+                if (!rkas->rkas_enabled || !rkas->rkas_on_assignment_cb)
+                        continue;
+
+                rkas->rkas_on_assignment_cb(rkcg->rkcg_member_id->str, &member,
+                                            rkas->rkas_opaque);
+        }
+}
 
 void rd_kafka_cgrp_handle_SyncGroup (rd_kafka_cgrp_t *rkcg,
 				     rd_kafka_broker_t *rkb,
@@ -3309,7 +3334,7 @@ void rd_kafka_cgrp_handle_SyncGroup (rd_kafka_cgrp_t *rkcg,
         int32_t TopicCnt;
         rd_kafkap_bytes_t UserData;
 
-	/* Dont handle new assignments when terminating */
+        /* Dont handle new assignments when terminating */
 	if (!err && rkcg->rkcg_flags & RD_KAFKA_CGRP_F_TERMINATE)
 		err = RD_KAFKA_RESP_ERR__DESTROY;
 
@@ -3363,8 +3388,12 @@ void rd_kafka_cgrp_handle_SyncGroup (rd_kafka_cgrp_t *rkcg,
         rd_kafka_buf_read_bytes(rkbuf, &UserData);
 
  done:
+        /* Give the assignor a chance to update internal state based on the
+         * received assignment */
+        rd_kafka_cgrp_assignor_invoke_on_assignment_cb(rkcg, assignment);
+
         /* Set the new assignment */
-	rd_kafka_cgrp_handle_assignment(rkcg, assignment);
+        rd_kafka_cgrp_handle_assignment(rkcg, assignment);
 
         rd_kafka_topic_partition_list_destroy(assignment);
 
