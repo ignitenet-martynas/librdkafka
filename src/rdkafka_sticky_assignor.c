@@ -98,14 +98,16 @@ static void
 serialize_topic_partition_list (const rd_kafka_topic_partition_list_t *tplist,
                                 const void **pdata,
                                 size_t *psize) {
-        size_t size = 0;
-        char *data, *p;
         int i, partition;
+        char *data, *p;
+        size_t size;
+
+        size = 0;
 
         for (i = 0; i < tplist->cnt; i++)
                 size += 2 + strlen(tplist->elems[i].topic) + 1;
 
-        data = malloc (size);
+        data = malloc(size);
 
         p = data;
 
@@ -162,6 +164,12 @@ void rd_kafka_sticky_assignor_on_assignment_cb (
 rd_kafkap_bytes_t *
 rd_kafka_sticky_assignor_get_metadata_cb (rd_kafka_assignor_t *rkas,
                                           const rd_list_t *topics) {
+
+        // Free previous userData if any
+        if (rkas->rkas_userdata !== NULL) {
+                free(rkas->rkas_userdata);
+        }
+
         if (member_assignment == NULL) {
                 rkas->rkas_userdata = NULL;
                 rkas->rkas_userdata_size = 0;
