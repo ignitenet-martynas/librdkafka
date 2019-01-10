@@ -87,10 +87,9 @@ typedef struct rd_kafka_assignor_s {
                 struct rd_kafka_assignor_s *rkpas,
 		const rd_list_t *topics);
 
-
         void (*rkas_on_assignment_cb) (const char *member_id,
-                                        rd_kafka_group_member_t
-                                        *assignment, void *opaque);
+                                       rd_kafka_group_member_t *assignment,
+                                       void *opaque);
 
         void *rkas_opaque;
 } rd_kafka_assignor_t;
@@ -170,4 +169,14 @@ rd_kafka_sticky_assignor_assign_cb (rd_kafka_t *rk,
                                     size_t eligible_topic_cnt,
                                     char *errstr, size_t errstr_size,
                                     void *opaque);
+
+rd_kafkap_bytes_t *
+rd_kafka_sticky_assignor_get_metadata_cb (rd_kafka_assignor_t *rdkas,
+                                          const rd_list_t *topics);
+
+void rd_kafka_sticky_assignor_on_assignment_cb (
+        const char *member_id,
+        rd_kafka_group_member_t *assignment,
+        void *opaque);
+
 #endif /* _RDKAFKA_ASSIGNOR_H_ */

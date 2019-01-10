@@ -521,13 +521,17 @@ int rd_kafka_assignors_init (rd_kafka_t *rk, char *errstr, size_t errstr_size) {
 				rk, &rkas, "consumer", "roundrobin",
 				rd_kafka_roundrobin_assignor_assign_cb,
 				NULL);
-		else if (!strcmp(s, "sticky"))
+		else if (!strcmp(s, "sticky")) {
 			rd_kafka_assignor_add(
 				rk, &rkas, "consumer", "sticky",
 				rd_kafka_sticky_assignor_assign_cb,
-				NULL);
-		else {
-			rd_snprintf(errstr, errstr_size,
+				&rkas);
+                        rkas->rkas_get_metadata_cb =
+                                rd_kafka_sticky_assignor_get_metadata_cb;
+                        rkas->rkas_on_assignment_cb =
+                                rd_kafka_sticky_assignor_on_assignment_cb;
+                } else {
+                        rd_snprintf(errstr, errstr_size,
 				    "Unsupported partition.assignment.strategy:"
 				    " %s", s);
 			return -1;
