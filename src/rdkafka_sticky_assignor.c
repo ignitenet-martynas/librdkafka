@@ -677,24 +677,62 @@ static int consumer_can_participate_in_reassignment (
 }
 
 static void partition_movements_move_partition () {
-
+        /* TODO: implement me! */
 }
 
 static void process_partition_movement () {
-
+        /* TODO: implement me! */
 }
 
 static void reassign_partition(const char *topic, int32_t partition,
-size_t consumer_cnt, rd_kafka_group_member_t *consumers,
-)
+        size_t mutable_consumer_cnt, rd_kafka_group_member_t *mutable_consumers,
+        rd_kafka_group_member_t *sorted_mutable_consumers,
+        size_t partition_cnt,
+        rd_kafka_topic_partition_consumers_t *partition_assigned_consumers,
+        size_t consumer_cnt,
+        rd_kafka_consumer_topic_partitions_t *consumer_assignable_partitions) {
+        /* TODO: implement me! */
+}
+
+static int is_balanced (size_t mutable_consumer_cnt,
+                        rd_kafka_group_member_t *mutable_consumers,
+                        rd_kafka_group_member_t *sorted_mutable_consumers,
+                        size_t consumer_cnt,
+                        rd_kafka_group_member_t *consumers) {
+        /* TODO: implement me! */
+        return 0;
+}
 
 static int perform_reassignments (
         rd_kafka_topic_partition_list_t *reassignable_partitions,
+        size_t mutable_consumer_cnt,
+        rd_kafka_group_member_t *mutable_consumers,
+        rd_kafka_group_member_t *sorted_mutable_consumers,
         size_t consumer_cnt,
-        rd_kafka_group_member_t *consumers
-
-) {
+        rd_kafka_consumer_topic_partitions_t *consumer_assignable_partitions,
+        size_t partition_cnt,
+        rd_kafka_topic_partition_consumers_t *partition_potential_consumers,
+        size_t assigned_partition_cnt,
+        rd_kafka_topic_partition_consumers_t *partition_assigned_consumers) {
+        /* TODO: implement me! */
         return 0;
+}
+
+static int
+get_balance_score (size_t consumer_cnt, rd_kafka_group_member_t *consumers) {
+        /* TODO: implement me! */
+        return 0;
+}
+
+static rd_kafka_group_member_t *
+rd_kafka_group_member_find(rd_kafka_group_member_t *members, size_t cnt, const char *member_id) {
+        size_t i;
+
+        for (i = 0; i < cnt; i++)
+                if (strcmp(members[i].rkgm_member_id->str, member_id) == 0)
+                        return &members[i];
+
+        return NULL;
 }
 
 static void
@@ -711,17 +749,17 @@ balance (size_t consumer_cnt,
         /* Just a separator */
         int initializing = 0;
         int reassignment_performed = 0;
-        int i;
 
         rd_kafka_topic_partition_list_t *reassignable_partitions;
-
-        rd_kafka_group_member_t *fixed_consumers;
-        size_t fixed_consumer_cnt;
 
         rd_kafka_group_member_t *mutable_consumers;
         size_t mutable_consumer_cnt;
 
+        rd_kafka_group_member_t *mutable_consumers_backup;
+        rd_kafka_group_member_t *sorted_mutable_consumers;
+
         size_t ci;
+        int i;
 
         if (sorted_consumers[consumer_cnt - 1].rkgm_assignment->cnt == 0)
                 initializing = 1;
@@ -761,10 +799,6 @@ balance (size_t consumer_cnt,
                                 reassignable_partitions, topic, partition);
         }
 
-        fixed_consumer_cnt = 0;
-        fixed_consumers =
-                calloc (consumer_cnt, sizeof (rd_kafka_group_member_t));
-
         mutable_consumer_cnt = 0;
         mutable_consumers =
                 calloc (consumer_cnt, sizeof (rd_kafka_group_member_t));
@@ -776,22 +810,77 @@ balance (size_t consumer_cnt,
                             partition_potential_consumers))
                         mutable_consumers[mutable_consumer_cnt++] =
                                 consumers[ci];
-                else
-                        fixed_consumers[fixed_consumer_cnt++] = consumers[ci];
 
-        reassignment_performed =
-                perform_reassignments (reassignable_partitions,
-                mutable_consumer_cnt, mutable_consumers,
-                consumer_cnt, consumer_assignable_partitions,
-                partition_cnt, partition_potential_consumers,
-                assigned_partition_cnt,
+        mutable_consumers_backup =
+                calloc (mutable_consumer_cnt, sizeof (rd_kafka_group_member_t));
+        memcpy (mutable_consumers_backup, mutable_consumers,
+                mutable_consumer_cnt * sizeof (rd_kafka_group_member_t));
+
+
+        sorted_mutable_consumers =
+                calloc (mutable_consumer_cnt, sizeof (rd_kafka_group_member_t));
+
+        memcpy (sorted_mutable_consumers, mutable_consumers,
+                mutable_consumer_cnt * sizeof (rd_kafka_group_member_t));
+
+        qsort (sorted_mutable_consumers, mutable_consumer_cnt,
+               sizeof (rd_kafka_group_member_t),
+               rd_kafka_group_member_cmp_assignments);
+
+        for (ci = 0; ci < mutable_consumer_cnt; ci++) {
+                mutable_consumers[ci].rkgm_assignment =
+                        rd_kafka_topic_partition_list_copy (
+                                mutable_consumers[ci].rkgm_assignment);
+                mutable_consumers_backup[ci].rkgm_assignment =
+                        rd_kafka_topic_partition_list_copy (
+                                mutable_consumers_backup[ci].rkgm_assignment);
+                sorted_mutable_consumers[ci].rkgm_assignment =
+                        rd_kafka_topic_partition_list_copy (
+                                sorted_mutable_consumers[ci].rkgm_assignment);
+        }
+
+        reassignment_performed = perform_reassignments (
+                reassignable_partitions, mutable_consumer_cnt,
+                mutable_consumers, sorted_mutable_consumers, consumer_cnt,
+                consumer_assignable_partitions, partition_cnt,
+                partition_potential_consumers, assigned_partition_cnt,
                 partition_assigned_consumers);
 
+        if (initializing || !reassignment_performed ||
+            get_balance_score (mutable_consumer_cnt, mutable_consumers) >
+                    get_balance_score (mutable_consumer_cnt,
+                                       mutable_consumers_backup)) {
+                for (ci = 0; ci < mutable_consumer_cnt; ci++) {
+                        rd_kafka_group_member_t *consumer;
 
+                        consumer = rd_kafka_group_member_find (
+                                consumers, consumer_cnt,
+                                mutable_consumers[ci].rkgm_member_id->str);
+
+                        rd_kafka_topic_partition_list_destroy (
+                                consumer->rkgm_assignment);
+                        consumer->rkgm_assignment =
+                                rd_kafka_topic_partition_list_copy (
+                                        mutable_consumers[ci].rkgm_assignment);
+                }
+        }
+
+        /* Free all the resources allocated in this function */
 
         rd_kafka_topic_partition_list_destroy (reassignable_partitions);
+
+        for (ci = 0; ci < mutable_consumer_cnt; ci++) {
+                rd_kafka_topic_partition_list_destroy (
+                        mutable_consumers_backup[ci].rkgm_assignment);
+                rd_kafka_topic_partition_list_destroy (
+                        sorted_mutable_consumers[ci].rkgm_assignment);
+                rd_kafka_topic_partition_list_destroy (
+                        mutable_consumers[ci].rkgm_assignment);
+        }
+
+        free (sorted_mutable_consumers);
+        free (mutable_consumers_backup);
         free (mutable_consumers);
-        free (fixed_consumers);
 }
 
 rd_kafka_resp_err_t rd_kafka_sticky_assignor_assign_cb (
