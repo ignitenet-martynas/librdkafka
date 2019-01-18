@@ -121,7 +121,7 @@ typedef struct rd_kafka_consumer_topic_partitions_s {
 
 static void
 serialize_topic_partition_list (const rd_kafka_topic_partition_list_t *tplist,
-                                const void **pdata,
+                                void **pdata,
                                 size_t *psize) {
         int32_t partition;
         char *data, *p;
@@ -182,12 +182,6 @@ void rd_kafka_sticky_assignor_on_assignment_cb (
         const char *member_id,
         rd_kafka_group_member_t *assignment,
         void *opaque) {
-
-        if (member_assignment != NULL) {
-                rd_kafka_topic_partition_list_destroy(
-                        member_assignment);
-        }
-
         member_assignment = rd_kafka_topic_partition_list_copy(
                 assignment->rkgm_assignment);
 }
@@ -195,23 +189,36 @@ void rd_kafka_sticky_assignor_on_assignment_cb (
 rd_kafkap_bytes_t *
 rd_kafka_sticky_assignor_get_metadata_cb (rd_kafka_assignor_t *rkas,
                                           const rd_list_t *topics) {
+        rd_kafkap_bytes_t *metadata;
 
-        // Free previous userData if any
-        if (rkas->rkas_userdata != NULL) {
-                free((void *)rkas->rkas_userdata);
-        }
+        void *serialized_assignment;
+        size_t serialized_assignment_size;
 
-        if (member_assignment == NULL) {
-                rkas->rkas_userdata = NULL;
-                rkas->rkas_userdata_size = 0;
-        } else {
-                // Serialize the assignments
+        if (member_assignment != NULL) {
+                /* Serialize the assignments */
                 serialize_topic_partition_list(member_assignment,
-                                               &rkas->rkas_userdata,
-                                               &rkas->rkas_userdata_size);
+                                               &serialized_assignment,
+                                               &serialized_assignment_size);
+
+                /* Free the no longer needed member_assignment */
+                rd_kafka_topic_partition_list_destroy (member_assignment);
+                member_assignment = NULL;
+        } else {
+                serialized_assignment = NULL;
+                serialized_assignment_size = 0;
         }
 
-        return rd_kafka_assignor_get_metadata(rkas, topics);
+        rkas->rkas_userdata = serialized_assignment;
+        rkas->rkas_userdata_size = serialized_assignment_size;
+
+        metadata = rd_kafka_assignor_get_metadata (rkas, topics);
+
+        /* serialized_assignment is now copied into metadata, can free it */
+        if (serialized_assignment != NULL) {
+                free (serialized_assignment);
+        }
+
+        return metadata;
 }
 
 static void
