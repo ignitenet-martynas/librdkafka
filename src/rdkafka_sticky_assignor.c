@@ -924,13 +924,13 @@ rd_kafka_resp_err_t rd_kafka_sticky_assignor_assign_cb (
 
                         /* Remove all partitions that the consumer is no longer
                          * subscribed to */
-                remove_non_eligible_partitions (rkgm->rkgm_assignment,
-                                                &rkgm->rkgm_eligible);
+                        remove_non_eligible_partitions (rkgm->rkgm_assignment,
+                                                        &rkgm->rkgm_eligible);
 
-                /* TODO: */
-                /* Remove all double-assignments that are a result of
-                 * as consumer coming back with its old assignments
-                 * after they have been already reassigned */
+                        /* TODO: */
+                        /* Remove all double-assignments that are a result of
+                        * as consumer coming back with its old assignments
+                        * after they have been already reassigned */
                 }
         }
 
