@@ -102,15 +102,25 @@
 typedef struct rd_kafka_topic_partition_consumers_s {
         const char *topic;
         int32_t partition;
-        const char *consumer;
-        size_t consumer_cnt;
-        const char **consumers;
+        const char *consumer            /* NULL when multiple consumers */
+        size_t consumer_cnt;            /* 0 when single consumer */
+        const char **consumers;         /* NULL when single consumer */
 } rd_kafka_topic_partition_consumers_t;
+
+/*
+ * A data structure representing a topic-partition w/o any additional
+ * (meta)data.
+ */
 
 typedef struct rd_kafka_simple_topic_partition_s {
         const char *topic;
         int32_t partition;
 } rd_kafka_simple_topic_partition_t;
+
+/*
+ * A data structure used for maping consumers by their group member ID to
+ * partitions that can be assigned to them.
+ */
 
 typedef struct rd_kafka_consumer_topic_partitions_s {
         const char *member_id;
@@ -196,13 +206,13 @@ rd_kafka_sticky_assignor_get_metadata_cb (rd_kafka_assignor_t *rkas,
 
         if (member_assignment != NULL) {
                 /* Serialize the assignments */
-                serialize_topic_partition_list(member_assignment,
-                                               &serialized_assignment,
-                                               &serialized_assignment_size);
+        serialize_topic_partition_list (member_assignment,
+                                        &serialized_assignment,
+                                        &serialized_assignment_size);
 
-                /* Free the no longer needed member_assignment */
-                rd_kafka_topic_partition_list_destroy (member_assignment);
-                member_assignment = NULL;
+        /* Free the no longer needed member_assignment */
+        rd_kafka_topic_partition_list_destroy (member_assignment);
+        member_assignment = NULL;
         } else {
                 serialized_assignment = NULL;
                 serialized_assignment_size = 0;
